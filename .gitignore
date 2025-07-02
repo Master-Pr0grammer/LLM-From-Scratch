@@ -1,0 +1,6 @@
+__pycache__/
+.DS_store
+.venv/
+tbbt_train.txt
+tbbt_test.txt
+Checkpoint.pth.tar
