@@ -3,4 +3,6 @@ __pycache__/
 .venv/
 tbbt_train.txt
 tbbt_test.txt
+test.py
 Checkpoint.pth.tar
+Transformer.pth.tar

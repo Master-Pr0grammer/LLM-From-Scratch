@@ -58,11 +58,12 @@ class Data():
         return x
     
     #get sample batch from training set
-    def get_train_sample(self, index, num_samples):
+    def get_random_train_sample(self, num_samples):
         #get sample
         x=[]
         y=[]
         for _ in range(num_samples):
+            index = random.randint(0, len(self.train_text) - self.ctx_size - 1 - num_samples)
             x.append(self._encoded_train_data[index:self.ctx_size + index])
             y.append(self._encoded_train_data[index + 1:self.ctx_size + index + 1])
             index+=1
