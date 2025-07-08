@@ -13,7 +13,7 @@ The model is trained with 80k steps at a batch size of 32, and was able to train
 
 2. Then activate the environment:
     - Mac/linux: `source .venv/bin/activate`
-    - Windows: `venv\Scripts\activate`
+    - Windows: `.venv\Scripts\activate`
 
 3. Then install the dependencies in the virtual environment
 
