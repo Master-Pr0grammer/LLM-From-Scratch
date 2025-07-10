@@ -41,7 +41,7 @@ for i in range(1, len(data)):
 
 #output data into txt file
 file = open('tbbt_train.txt', 'w', encoding='utf8')
-for episode in episodes_text[:int(len(episodes_text)*0.8)]:
+for episode in episodes_text[:int(len(episodes_text)*TRAIN_SPLIT_PERCENT)]:
     file.write(episode + '\n')
 file.close()
 
@@ -51,4 +51,4 @@ for episode in episodes_text[int(len(episodes_text)*TRAIN_SPLIT_PERCENT):]:
 file.close()
 
 #print final info
-print(f'{len(episodes_text[:int(len(episodes_text)*TRAIN_SPLIT_PERCENT)])} Episodes saved to training set, {len(episodes_text[int(len(episodes_text)*0.8):])} saved to test set')
+print(f'{len(episodes_text[:int(len(episodes_text)*TRAIN_SPLIT_PERCENT)])} Episodes saved to training set, {len(episodes_text[int(len(episodes_text)*TRAIN_SPLIT_PERCENT):])} saved to test set')

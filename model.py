@@ -132,19 +132,19 @@ class Transformer(nn.Module):
             'optimizer_state': self.optimizer.state_dict(),
             'hyperparams': {
                 'vocab_size': self.vocab_size,
-                'chunk_size': self.ctx_window_length,
+                'ctx_window_length': self.ctx_window_length,
                 'embedding_dim': self.embedding_dim,
                 'num_attention_blocks': self.num_attention_blocks,
-                'num_heads': self.num_attention_heads,
+                'num_attention_heads': self.num_attention_heads,
                 'learning_rate': self.learning_rate,
-                'dropout': self.dropout_rate
+                'dropout_rate': self.dropout_rate
             },
             'training_state': training_state # training meta data
         }
         
         torch.save(checkpoint, filename)
 
-    def create_from_checkpoint(path):
+    def create_from_checkpoint(path, device='cpu'):
         checkpoint:dict = torch.load(path)
         h = checkpoint['hyperparams']
         model = Transformer(**h)
@@ -152,6 +152,8 @@ class Transformer(nn.Module):
         
         if checkpoint.get('training_state'):
             model.training_state = checkpoint.get('training_state')
+            
+        model.to(device)
 
         # Recreate optimizer AFTER loading model
         model.optimizer = torch.optim.AdamW(model.parameters(), lr=h['learning_rate'])

@@ -4,5 +4,5 @@ __pycache__/
 tbbt_train.txt
 tbbt_test.txt
 test.py
-Checkpoint.pth.tar
+*.pth.tar
 Transformer.pth.tar

@@ -4,9 +4,15 @@ from model import *
 from tokenizer import Tokenizer
 from Data import Data
 
+#choose device
+if torch.cuda.is_available():
+    device = torch.device("cuda:0")
+else:
+    device = torch.device("cpu")
+print(f'Device set to {device}')
 
 #load saved checkpoint
-model = Transformer.create_from_checkpoint('Transformer.pth.tar')
+model = Transformer.create_from_checkpoint('Best_Checkpoint.pth.tar').to(device)
 
 #get data for initial tokens
 vocab_file = 'vocab_chars.json'
@@ -24,13 +30,12 @@ initial_text = data.train_text[0:data.ctx_size]
 
 # Generation Config
 TEMPERATURE = 0.8
-TOP_P = 0.9
+TOP_P = 1
 BEAM_WIDTH = 32
-GEN_LENGTH = 600
+GEN_LENGTH = 2000
 NGRAM_PENALTY = 3
 
 model.eval()
-device = next(model.parameters()).device
 
 # Beam: list of (tokens, text, total_log_prob, seen_ngrams)
 beam = [(initial_tokens, initial_text, 0.0, set())]
@@ -101,9 +106,9 @@ for step in range(GEN_LENGTH):
     perplexity = math.exp(-avg_log_prob)
 
     # Clear terminal and show progress
-    os.system("clear")  # "cls" for Windows
-    print('"' + best_text + '"\n')
-    print(f"[Step {step+1}/{GEN_LENGTH}] Perplexity: {perplexity:.3f}")
+    os.system('cls' if os.name == 'nt' else 'clear')
+    print('"' + best_text + '"\n', flush=True)
+    print(f"[Step {step+1}/{GEN_LENGTH}] Perplexity: {perplexity:.3f}", flush=True)
 
 # Final output
 print("\n=== Final Output ===")
