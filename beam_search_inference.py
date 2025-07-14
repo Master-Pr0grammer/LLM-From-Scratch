@@ -1,6 +1,6 @@
 import torch, math, os, json
 import torch.nn as nn
-from model import *
+from moe_transformer_model import *
 from tokenizer import Tokenizer
 from Data import Data
 
@@ -12,7 +12,7 @@ else:
 print(f'Device set to {device}')
 
 #load saved checkpoint
-model = Transformer.create_from_checkpoint('Best_Checkpoint.pth.tar').to(device)
+model = MOE_Transformer.create_from_checkpoint('Best_Checkpoint.pth.tar').to(device)
 
 #get data for initial tokens
 vocab_file = 'vocab_chars.json'
