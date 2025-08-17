@@ -13,13 +13,16 @@ The model is trained with 80k steps at a batch size of 32, and was able to train
 
 2. Then activate the environment:
     - Mac/linux: `source .venv/bin/activate`
-    - Windows: `venv\Scripts\activate`
+    - Windows: `.venv\Scripts\activate`
 
 3. Then install the dependencies in the virtual environment
 
     `pip install -r requirements.txt`
 
-4. Next, you need to parse the raw csv data, this can be done by running the TBBT_parse.py script:
+4. (Optional) If on  a device with a cuda cabable device (ie, nvidia GPU), re-install pytorch with the correct install command for your device as described here: `https://pytorch.org/get-started/locally/`\
+    This just makes training signifigantly faster, although it is not strictly neccesary.
+
+5. Next, you need to parse the raw csv data, this can be done by running the TBBT_parse.py script:
 
     `python3 TBBT_parse.py`
 

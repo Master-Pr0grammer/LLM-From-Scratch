@@ -83,18 +83,90 @@ class Attention_Block(nn.Module):
         return x
 
 
-class Router(nn.Module):
-    def __init__(self, embedding_dim, num_experts):
-        super().__init__()
+class Router(nn.Module): 
+    def __init__(self, embedding_dim, num_experts, n_samples): 
+        super().__init__() 
         
         self.fc0 = nn.Linear(embedding_dim, num_experts)
+        self.n_samples = n_samples
+         
+    def forward(self, x): 
+        # x shape: (batch, time, channel)
+        batch_size = x.shape[0]
         
+        # Pool over time dimension and get logits
+        x = self.fc0(torch.sum(x, dim=1))  # (batch, num_experts)
+        
+        # Convert to probabilities
+        probs = torch.softmax(x, dim=1)  # (batch, num_experts)
+        
+        # Sample n unique experts for each batch item
+        # multinomial with replacement=False ensures uniqueness
+        selected_experts = torch.multinomial(
+            probs, 
+            num_samples=self.n_samples, 
+            replacement=False
+        )  # (batch, n_samples)
+         
+        return selected_experts
+    
+class MOE_Attention_Block(nn.Module):
+    def __init__(self, embedding_dim, ctx_window_length, num_heads, num_experts, num_active_experts, dropout_rate):
+        super().__init__()
+        self.router = Router(embedding_dim, num_experts, num_active_experts)
+        self.n_samples = num_active_experts
+        self.expert_blocks = nn.ModuleList([
+            Attention_Block(embedding_dim, ctx_window_length, num_heads, dropout_rate)
+            for _ in range(num_experts+1) # Add one expert for the "generalist" that is always active
+        ])
+
     def forward(self, x):
-        x = self.fc0(torch.sum(x, dim=1))
-        x = nn.functional.softmax(x)
-        x = torch.argmax(x, dim=1)
+        # x: (B, T, C)
+        B, T, C = x.shape
         
-        return x
+        # Get router probabilities and sampled expert indices
+        pooled_x = torch.sum(x, dim=1)  # (B, C)
+        logits = self.router.fc0(pooled_x)  # (B, num_experts)
+        probs = torch.softmax(logits, dim=1)  # (B, num_experts)
+        expert_ids = self.router(x)  # (B, n_samples)
+        
+        # Create batched inputs for all expert computations
+        # Flatten expert_ids to get all (batch_idx, expert_idx) pairs
+        batch_indices = torch.arange(B, device=x.device).unsqueeze(1).expand(-1, self.n_samples)  # (B, n_samples)
+        flat_batch_indices = batch_indices.flatten()  # (B * n_samples,)
+        flat_expert_ids = expert_ids.flatten()  # (B * n_samples,)
+        
+        # Get corresponding inputs and weights
+        expert_inputs = x[flat_batch_indices]  # (B * n_samples, T, C)
+        expert_weights = probs[flat_batch_indices, flat_expert_ids]  # (B * n_samples,)
+        
+        # Group by expert for batched processing
+        unique_experts = torch.unique(flat_expert_ids)
+        expert_outputs = torch.zeros_like(expert_inputs)  # (B * n_samples, T, C)
+        
+        # Process each expert's batch
+        for expert_idx in unique_experts:
+            mask = (flat_expert_ids == expert_idx)
+            if mask.any():
+                expert_batch = expert_inputs[mask]  # (batch_size_for_expert, T, C)
+                output_batch = self.expert_blocks[expert_idx](expert_batch)  # (batch_size_for_expert, T, C)
+                expert_outputs[mask] = output_batch
+        
+        # Process generalist for all batch items
+        generalist_outputs = self.expert_blocks[-1](x)  # (B, T, C)
+        generalist_weights = probs[batch_indices, expert_ids].mean(dim=1)  # (B,)
+        
+        # Reshape expert outputs back to (B, n_samples, T, C) and apply weights
+        expert_outputs = expert_outputs.view(B, self.n_samples, T, C)
+        expert_weights = expert_weights.view(B, self.n_samples, 1, 1)  # Broadcast dims
+        weighted_expert_outputs = expert_outputs * expert_weights  # (B, n_samples, T, C)
+        
+        # Sum across experts and add generalist
+        output = weighted_expert_outputs.sum(dim=1)  # (B, T, C)
+        generalist_weights = generalist_weights.view(B, 1, 1)  # Broadcast dims
+        output += generalist_weights * generalist_outputs  # (B, T, C)
+        
+        return output
 
 
 
@@ -109,6 +181,7 @@ class MOE_Transformer(nn.Module):
         num_attention_blocks:int, 
         learning_rate:float, 
         num_experts:int,
+        num_active_experts:int,
         dropout_rate:float=0.0,
         ):
         
@@ -121,6 +194,8 @@ class MOE_Transformer(nn.Module):
         self.num_attention_blocks = num_attention_blocks
         self.learning_rate = learning_rate
         self.dropout_rate = dropout_rate
+        self.num_experts = num_experts
+        self.num_active_experts = num_active_experts
         
         # meta data:
         self.training_state:dict = None
@@ -129,10 +204,10 @@ class MOE_Transformer(nn.Module):
         self.char_emb = nn.Embedding(vocab_size, embedding_dim)
         self.pos_emb = nn.Embedding(self.ctx_window_length, embedding_dim)
         
-        self.router = Router(embedding_dim, num_experts)
+        self.router = Router(embedding_dim, num_experts, num_active_experts)
 
         #attention layers
-        self.experts = [nn.Sequential(*[Attention_Block(embedding_dim, ctx_window_length, num_attention_heads, dropout_rate) for _ in range(num_attention_blocks)]) for _ in range(num_experts)]
+        self.moe_attention_blocks =  nn.Sequential(*[MOE_Attention_Block(embedding_dim, ctx_window_length, num_attention_heads, num_experts, num_active_experts, dropout_rate) for _ in range(num_attention_blocks)])
         #self.attention_blocks = nn.Sequential(*[Attention_Block(embedding_dim, ctx_window_length, num_attention_heads, dropout_rate) for _ in range(num_attention_blocks)])
         self.layer_norm = nn.LayerNorm(embedding_dim)
 
@@ -159,7 +234,9 @@ class MOE_Transformer(nn.Module):
                 'num_attention_blocks': self.num_attention_blocks,
                 'num_attention_heads': self.num_attention_heads,
                 'learning_rate': self.learning_rate,
-                'dropout_rate': self.dropout_rate
+                'dropout_rate': self.dropout_rate,
+                'num_experts':self.num_experts,
+                'num_active_experts': self.num_active_experts,
             },
             'training_state': training_state # training meta data
         }
@@ -204,16 +281,9 @@ class MOE_Transformer(nn.Module):
         pos_emb = self.pos_emb(torch.arange(self.ctx_window_length, device=next(self.parameters()).device)) # Use current model device
         x = char_emb + pos_emb
         
-        experts = self.router(x)
-        outputs = []
+        x = self.moe_attention_blocks(x)
         
-        i = 0
-        for idx in experts:
-            outputs.append(self.experts[0](x[i].unsqueeze(0)))
-            i+=1
-        x = torch.stack(outputs)
-        #attention_blocks = self.experts[self.router(x)[:,-1]]
-
+        
         #x = attention_blocks(x)
         x = self.layer_norm(x)
         #x = x.view((-1, chunk_size * embedding_dim))

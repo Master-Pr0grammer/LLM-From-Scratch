@@ -22,9 +22,9 @@ file.close()
 tokenizer = Tokenizer(vocab)
 
 # Get dummy stating string
-data = Data('tbbt_train.txt', 'tbbt_test.txt', tokenizer, model.ctx_window_length, sample_data=True)
-initial_tokens = data._encoded_train_data[-data.ctx_size:]
-initial_text = data.train_text[0:data.ctx_size]
+data = Data('tbbt_train.txt', 'tbbt_test.txt', tokenizer, sample_data=True)
+initial_tokens = data._encoded_train_data[-model.ctx_window_length:]
+initial_text = data.train_text[0:model.ctx_window_length]
 
 
 
@@ -56,7 +56,7 @@ for step in range(GEN_LENGTH):
     beam_metadata = []
 
     for tokens, text, log_prob_sum, seen_ngrams in beam:
-        x = torch.tensor(tokens[-data.ctx_size:]).to(device).reshape(1, -1)
+        x = torch.tensor(tokens[-model.ctx_window_length:]).to(device).reshape(1, -1)
         x_batch.append(x)
         beam_metadata.append((tokens, text, log_prob_sum, seen_ngrams))
 
